@@ -1,6 +1,8 @@
 plugins {
 	id 'java'
+	// Spring Boot 插件：提供 bootRun / bootJar，并引入依赖版本管理（BOM）
 	id 'org.springframework.boot' version '4.1.0'
+	// 让 implementation 等声明可以省略版本号，版本统一由上面的 BOM 决定
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -9,6 +11,7 @@ version = '0.0.1-SNAPSHOT'
 
 java {
 	toolchain {
+		// 用工具链固定编译用的 JDK，避免依赖本机默认 java 版本
 		languageVersion = JavaLanguageVersion.of(25)
 	}
 }
@@ -18,10 +21,15 @@ repositories {
 }
 
 dependencies {
+	// Web MVC：提供 REST 接口、静态资源托管和 multipart 上传支持
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// Spring Data JPA + Hibernate：用来把文件元数据管理在 H2 里
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	// H2 控制台。Spring Boot 4 把它从 autoconfigure 拆成了独立模块，
+	// 只配 spring.h2.console.enabled=true 而没有这个依赖的话，/h2-console 会 404
 	implementation 'org.springframework.boot:spring-boot-h2console'
 
+	// H2 数据库驱动，只在运行时需要
 	runtimeOnly 'com.h2database:h2'
 }
 

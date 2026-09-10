@@ -5,6 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>文件列表 - file-server</title>
 	<style>
+		/* 设计变量集中在这里，配色改动只需动这一处 */
 		:root {
 			--border: #e2e4e8;
 			--text: #1f2328;
@@ -13,6 +14,7 @@
 			--primary-dark: #1d4ed8;
 			--danger: #dc2626;
 			--danger-dark: #b91c1c;
+			/* tab 条底色（仿 Chrome 的灰色标签栏） */
 			--tabstrip: #dee1e6;
 		}
 		* { box-sizing: border-box; }
@@ -36,7 +38,7 @@
 		.upload-panel h2 { font-size: 16px; margin: 0 0 8px; }
 		.upload-hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 
-		/* ---------------- drag & drop upload ---------------- */
+		/* ==================== 上传区：拖拽 / 多选 ==================== */
 		.drop-zone {
 			display: flex;
 			flex-direction: column;
@@ -111,7 +113,7 @@
 		.queue-item[data-state="error"] .queue-status { color: var(--danger); }
 		.queue-item[data-state="error"] { background: #fffafa; border-color: #fecaca; }
 
-		/* ---------------- toolbar ---------------- */
+		/* ==================== 顶部工具栏（全选 / 批量删除 / 刷新） ==================== */
 		.toolbar {
 			display: flex;
 			gap: 12px;
@@ -131,7 +133,12 @@
 		.toolbar-right { margin-left: auto; }
 		#selectionInfo { color: var(--muted); font-size: 14px; }
 
-		/* ---------------- tabs + content as one rounded unit ---------------- */
+		/* ==================== 分组 tab + 内容区（Chrome 风格，同一块圆角整体） ====================
+		 * 思路：外层 .tabs-shell 统一 10px 圆角并用 overflow:hidden 收边，
+		 * 里面的 tab 条和内容区分别是它的上下两部分，因此四个圆角是一体的。
+		 * 激活的 tab 用和内容区一样的白底，且紧贴内容区顶边（tab 条 padding-bottom: 0），
+		 * 于是中间不会出现分隔线。
+		 */
 		.tabs-shell {
 			border-radius: 10px;
 			overflow: hidden;
@@ -143,6 +150,7 @@
 			display: flex;
 			align-items: flex-end;
 			gap: 3px;
+			/* 底部不留内边距，让 tab 底边正好压在内容区顶边上 */
 			padding: 8px 12px 0;
 			background: var(--tabstrip);
 			overflow-x: auto;
@@ -173,9 +181,13 @@
 			background: #fff;
 			color: var(--text);
 			font-weight: 600;
+			/* 高于相邻 tab，让下面两个凹角压在邻居之上 */
 			z-index: 1;
 		}
-		/* concave "inverted corner" fillets that blend the active tab into the content */
+		/* 激活 tab 两侧的内凹过渡（Chrome 那种效果）。
+		 * 用径向渐变在一个 8x8 的小方块里「挖」出四分之一圆：
+		 * 以方块左上角为圆心、半径 8px 内透明、之外填白，留下的正好是凹形白色。
+		 * 右半边把圆心换成右上角，左右镜像。 */
 		.tab.active::before,
 		.tab.active::after {
 			content: "";
@@ -193,6 +205,7 @@
 			right: -8px;
 			background: radial-gradient(circle at right top, transparent 0, transparent 8px, #fff 8px);
 		}
+		/* 标签文字和角标不接收鼠标事件，保证点击落在 tab 本体上 */
 		.tab-label { pointer-events: none; }
 		.tab-badge {
 			min-width: 20px;
@@ -206,8 +219,10 @@
 			pointer-events: none;
 		}
 		.tab.active .tab-badge { background: rgba(17, 24, 39, 0.07); }
+		/* 该分组有选中项时，角标变成「本组选中数/本组总数」并高亮 */
 		.tab-badge.has-selection { background: var(--primary); color: #fff; }
 
+		/* 内容区顶部的一条信息栏（组名 + 文件数 + 总大小） */
 		.panel-head {
 			display: flex;
 			align-items: center;
@@ -222,6 +237,8 @@
 		}
 		.panel-meta { margin-left: auto; }
 
+		/* 表格：table-layout: fixed + colgroup 固定列宽，
+		 * 保证切换 tab 时各分组的列宽完全一致，不会左右跳动 */
 		table {
 			width: 100%;
 			table-layout: fixed;
@@ -255,6 +272,7 @@
 		.actions .btn { padding: 6px 10px; }
 		.actions .btn + .btn { margin-left: 6px; }
 
+		/* ==================== 通用按钮 / 空状态 / 浮层提示 ==================== */
 		.btn {
 			display: inline-block;
 			padding: 6px 14px;
@@ -281,12 +299,14 @@
 			color: #fff;
 		}
 		.btn-download:hover { background: var(--primary-dark); }
+		/* 实心红：工具栏的「删除选中」 */
 		.btn-danger {
 			background: var(--danger);
 			border-color: var(--danger);
 			color: #fff;
 		}
 		.btn-danger:hover { background: var(--danger-dark); }
+		/* 描边红：每行的「删除」，弱化视觉权重避免误点 */
 		.btn-danger-ghost { color: var(--danger); border-color: #fecaca; }
 		.btn-danger-ghost:hover { background: #fef2f2; }
 		.empty {
@@ -297,6 +317,7 @@
 			text-align: center;
 			color: var(--muted);
 		}
+		/* 底部居中的浮层提示：平时 opacity 0 且不接收鼠标事件，加 .visible 时淡入 */
 		#toast {
 			position: fixed;
 			left: 50%;
@@ -319,6 +340,10 @@
 <body>
 <div class="container">
 	<h1>文件列表</h1>
+
+	<!-- ==================== 上传区 ====================
+	     drop 区域负责接收拖拽，也可以点击它打开系统文件选择框（input 设了 multiple）。
+	     上传进度与结果由下面的 uploadSummary / uploadQueue 动态渲染。 -->
 	<section class="upload-panel">
 		<h2>上传文件</h2>
 		<p class="upload-hint">
@@ -328,6 +353,7 @@
 			.jpg .jpeg .png .gif .bmp .webp .tif .tiff .avif .heic
 			.arw .nef .dng .rw2
 		</p>
+		<!-- role=button + tabindex 让键盘也能触发（Enter/空格打开选择框） -->
 		<div class="drop-zone" id="dropZone" role="button" tabindex="0"
 			aria-label="把文件拖到这里，或点击选择文件上传">
 			<svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -337,6 +363,7 @@
 			<div class="drop-title">把文件拖到这里上传</div>
 			<div class="drop-sub">或点击选择文件（支持多选）</div>
 		</div>
+		<!-- 隐藏的原生选择框：accept 是后端白名单的镜像，multiple 开启多选 -->
 		<input type="file" id="fileInput" multiple hidden
 			accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.ofd,.txt,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tif,.tiff,.avif,.heic,.arw,.nef,.dng,.rw2">
 		<div class="upload-summary" id="uploadSummary" hidden></div>
@@ -345,6 +372,8 @@
 
 	<p class="hint" id="hint">加载中…</p>
 
+	<!-- ==================== 工具栏 ====================
+	     「全选」作用于所有分组；当前分组的全选在表头复选框上 -->
 	<div class="toolbar" id="toolbar" hidden>
 		<label class="global-select">
 			<input type="checkbox" id="selectAll" disabled>
@@ -356,6 +385,9 @@
 		<button type="button" id="refresh" class="btn toolbar-right">刷新</button>
 	</div>
 
+	<!-- ==================== 分组 tab + 内容区 ====================
+	     tab 条和内容区同属 .tabs-shell，共享同一组圆角，看起来是一整块。
+	     只有存在文件的分组才会生成 tab；内容区每次只渲染当前分组。 -->
 	<div class="tabs-shell" id="tabsShell" hidden>
 		<div class="tab-strip" id="tabStrip" role="tablist" aria-label="文件格式分组"></div>
 		<div class="tab-panel" id="tabPanel" role="tabpanel" tabindex="-1">
@@ -372,8 +404,13 @@
 <div id="toast"></div>
 <script>
 	/**
-	 * File-format groups, in tab order. The first group whose extension list
-	 * matches wins; the group without extensions is the fallback for everything else.
+	 * 文件格式分组表，数组顺序就是 tab 的显示顺序。
+	 * key      —— 分组的唯一标识，会写进 DOM 的 data-group，用于切换和查找
+	 * label    —— tab 上显示的名字
+	 * extensions —— 该分组包含的后缀（小写、不含点）
+	 *
+	 * 匹配规则见 groupOf()：按数组顺序找第一个包含该后缀的分组；
+	 * 最后一个分组 extensions 为空，作为兜底，保证任何文件都能落到某个 tab 里而不丢失。
 	 */
 	const FILE_GROUPS = [
 		{ key: 'ofd', label: 'OFD 文档', extensions: ['ofd'] },
@@ -385,15 +422,16 @@
 		{ key: 'other', label: '其他文档', extensions: [] }
 	];
 
-	/** Files currently listed, mirrored from the API. */
+	/** 当前列表数据（/api/files 的原样结果）。 */
 	let files = [];
-	/** Files bucketed by format group, rebuilt on every render. */
+	/** files 按格式分组后的结果，每次渲染重建，只包含「有文件」的分组，顺序同 FILE_GROUPS。 */
 	let groupBuckets = [];
-	/** Key of the group whose tab is showing. */
+	/** 当前显示的是哪个分组的 tab；分组被删空后会在渲染时回退到第一个分组。 */
 	let activeGroupKey = null;
-	/** Ids of the rows the user ticked. */
+	/** 已勾选的文件 id 集合。选择是跨分组共享的，所以用全局 Set 而不是按 tab 分开存。 */
 	const selected = new Set();
 
+	/** 拉取文件列表并重绘整个视图。失败时只在顶部提示，不清空已有内容。 */
 	async function loadFiles() {
 		const hint = document.getElementById('hint');
 		try {
@@ -402,7 +440,7 @@
 				throw new Error('HTTP ' + response.status);
 			}
 			files = await response.json();
-			// Drop selections that no longer exist (deleted in another tab, etc).
+			// 清理已失效的选中项：文件可能被别的标签页删掉了
 			const liveIds = new Set(files.map(file => file.id));
 			for (const id of Array.from(selected)) {
 				if (!liveIds.has(id)) {
@@ -415,6 +453,7 @@
 		}
 	}
 
+	/** 根据当前 files 重绘 tab 条、内容区和选择状态；没有文件时显示空状态。 */
 	function renderFiles() {
 		const shell = document.getElementById('tabsShell');
 		const empty = document.getElementById('empty');
@@ -438,7 +477,7 @@
 		empty.hidden = true;
 		hint.textContent = '共 ' + files.length + ' 个文件，分为 ' + groupBuckets.length + ' 类';
 
-		// Keep the tab the user was on; fall back to the first one when it disappeared.
+		// 尽量停留在用户原来所在的 tab；该分组已消失（被删空）时回退到第一个
 		if (!groupBuckets.some(bucket => bucket.key === activeGroupKey)) {
 			activeGroupKey = groupBuckets[0].key;
 		}
@@ -447,7 +486,7 @@
 		updateSelectionUi();
 	}
 
-	/** Buckets the flat file list into the format groups, keeping FILE_GROUPS order. */
+	/** 把扁平的文件列表装进各个格式分组，返回顺序与 FILE_GROUPS 一致；空分组不会出现。 */
 	function groupFiles(list) {
 		const byKey = new Map();
 		for (const file of list) {
@@ -459,26 +498,34 @@
 			}
 			bucket.files.push(file);
 		}
+		// 用 FILE_GROUPS 的顺序去取，保证 tab 顺序稳定（不受文件到达顺序影响）
 		return FILE_GROUPS.filter(definition => byKey.has(definition.key))
 			.map(definition => byKey.get(definition.key));
 	}
 
+	/** 判断一个文件属于哪个分组；都匹配不上时落到最后一个兜底分组（其他文档）。 */
 	function groupOf(name) {
 		const extension = extensionOf(name);
 		return FILE_GROUPS.find(group => group.extensions.includes(extension))
 			|| FILE_GROUPS[FILE_GROUPS.length - 1];
 	}
 
+	/** 取小写后缀（不含点）；没有后缀或结尾是点则返回空串。 */
 	function extensionOf(name) {
 		const value = String(name || '');
 		const dot = value.lastIndexOf('.');
 		return dot < 0 || dot === value.length - 1 ? '' : value.slice(dot + 1).toLowerCase();
 	}
 
+	/** 当前 tab 对应的分组对象，找不到返回 null。 */
 	function activeBucket() {
 		return groupBuckets.find(bucket => bucket.key === activeGroupKey) || null;
 	}
 
+	/**
+	 * 重建 tab 条。只在分组集合发生变化（数据刷新）时调用；
+	 * 单纯切换 tab 走 setActiveGroup()，避免重建 DOM 导致按钮失去焦点。
+	 */
 	function renderTabs() {
 		const strip = document.getElementById('tabStrip');
 		strip.replaceChildren();
@@ -486,7 +533,9 @@
 			const tab = document.createElement('button');
 			tab.type = 'button';
 			tab.className = 'tab';
+			// data-group 是切换和查找分组的关键，事件委托里靠它定位
 			tab.dataset.group = bucket.key;
+			// 无障碍：role=tab + aria-selected 由 syncActiveTab 维护
 			tab.setAttribute('role', 'tab');
 			tab.id = 'tab-' + bucket.key;
 			tab.setAttribute('aria-controls', 'tabPanel');
@@ -495,6 +544,7 @@
 			label.className = 'tab-label';
 			label.textContent = bucket.label;
 
+			// 角标：默认显示本组文件总数，有选中时变成「选中数/总数」
 			const badge = document.createElement('span');
 			badge.className = 'tab-badge';
 
@@ -504,6 +554,7 @@
 		syncActiveTab();
 	}
 
+	/** 把 active 状态同步到 tab 上（只改 class 和 aria，不重建 DOM）。 */
 	function syncActiveTab() {
 		document.querySelectorAll('#tabStrip .tab').forEach(tab => {
 			const isActive = tab.dataset.group === activeGroupKey;
@@ -516,7 +567,7 @@
 		}
 	}
 
-	/** Switches tabs without rebuilding the strip, so focus is preserved. */
+	/** 切换 tab：不重建 tab 条，因此键盘焦点不会丢失。 */
 	function setActiveGroup(key) {
 		if (key === activeGroupKey) {
 			return;
@@ -527,6 +578,7 @@
 		updateSelectionUi();
 	}
 
+	/** 重绘内容区：顶部信息栏 + 当前分组的表格。 */
 	function renderPanel() {
 		const bucket = activeBucket();
 		const title = document.getElementById('panelTitle');
@@ -546,14 +598,17 @@
 		body.appendChild(buildTable(bucket));
 	}
 
+	/** 取该分组第一个文件的后缀，仅用于标题展示；取不到就用 - 占位。 */
 	function primaryExtension(bucket) {
 		const first = bucket.files[0];
 		return extensionOf(first ? (first.originalName || first.name) : '') || '-';
 	}
 
+	/** 构造当前分组的表格：colgroup 固定列宽 + 表头（含「全选本组」）+ 数据行。 */
 	function buildTable(bucket) {
 		const table = document.createElement('table');
 
+		// colgroup 与 CSS 里的列宽类配合，保证切换分组时列宽不跳动
 		const colgroup = document.createElement('colgroup');
 		for (const className of ['col-check', '', 'col-size', 'col-time', 'col-actions']) {
 			const col = document.createElement('col');
@@ -567,6 +622,7 @@
 		const thead = document.createElement('thead');
 		const headRow = document.createElement('tr');
 
+		// 表头第一格是「全选本组」，只作用于当前 tab 的文件
 		const checkHead = document.createElement('th');
 		checkHead.className = 'col-check';
 		const panelCheck = document.createElement('input');
@@ -576,6 +632,7 @@
 		checkHead.appendChild(panelCheck);
 		headRow.appendChild(checkHead);
 
+		// 其余表头：文件名、大小、上传时间、操作
 		for (const [className, text] of [['', '文件名'], ['col-size', '大小'], ['col-time', '上传时间'], ['col-actions', '操作']]) {
 			const th = document.createElement('th');
 			if (className) {
@@ -595,6 +652,10 @@
 		return table;
 	}
 
+	/**
+	 * 构造一行文件。全部用 DOM API + textContent 赋值，
+	 * 而不是拼 innerHTML —— 文件名可能含 & < " 等字符，这样天然免去转义问题。
+	 */
 	function buildRow(file) {
 		const tr = document.createElement('tr');
 		tr.dataset.id = String(file.id);
@@ -602,6 +663,7 @@
 			tr.classList.add('selected');
 		}
 
+		// 勾选列
 		const checkCell = document.createElement('td');
 		checkCell.className = 'col-check';
 		const checkbox = document.createElement('input');
@@ -613,6 +675,7 @@
 		checkCell.appendChild(checkbox);
 		tr.appendChild(checkCell);
 
+		// 文件名列：主行是原始文件名，副行是它在 upload/ 下的存储路径
 		const nameCell = document.createElement('td');
 		const original = document.createElement('div');
 		original.className = 'original-name';
@@ -635,6 +698,7 @@
 		timeCell.textContent = formatTime(file.uploadedAt);
 		tr.appendChild(timeCell);
 
+		// 操作列：拷贝地址 / 下载 / 删除
 		const actions = document.createElement('td');
 		actions.className = 'actions col-actions';
 
@@ -642,6 +706,7 @@
 		copyButton.type = 'button';
 		copyButton.className = 'btn';
 		copyButton.textContent = '拷贝地址';
+		// 后端返回的是相对路径，这里补成完整 URL 再复制，方便直接发给别人
 		copyButton.addEventListener('click', () => copyText(new URL(file.downloadUrl, location.origin).href));
 
 		const downloadLink = document.createElement('a');
@@ -653,6 +718,7 @@
 		deleteButton.type = 'button';
 		deleteButton.className = 'btn btn-danger-ghost';
 		deleteButton.textContent = '删除';
+		// 单行删除复用批量删除接口，只是数组里只有一个 id
 		deleteButton.addEventListener('click', () => deleteFiles([file.id]));
 
 		actions.append(copyButton, downloadLink, deleteButton);
@@ -661,12 +727,18 @@
 		return tr;
 	}
 
+	/**
+	 * 刷新所有与「选择」相关的 UI：
+	 * 工具栏（全选 / 两个按钮 / 计数）、当前分组的表头全选框、每个 tab 的角标。
+	 * 任何一次勾选变化后都调用它，保证三处状态永远一致。
+	 */
 	function updateSelectionUi() {
 		const selectAll = document.getElementById('selectAll');
 		const deleteSelected = document.getElementById('deleteSelected');
 		const clearSelection = document.getElementById('clearSelection');
 		const selectionInfo = document.getElementById('selectionInfo');
 
+		// 全局全选：选满为 checked，选中一部分为半选 indeterminate
 		selectAll.disabled = files.length === 0;
 		selectAll.checked = files.length > 0 && selected.size === files.length;
 		selectAll.indeterminate = selected.size > 0 && selected.size < files.length;
@@ -675,7 +747,7 @@
 		clearSelection.disabled = selected.size === 0;
 		selectionInfo.textContent = '已选择 ' + selected.size + ' / ' + files.length + ' 个文件';
 
-		// the visible tab's "select all in this group" checkbox
+		// 当前 tab 表头的「全选本组」复选框
 		const panelCheck = document.querySelector('.panel-check');
 		const bucket = activeBucket();
 		if (panelCheck && bucket) {
@@ -684,6 +756,7 @@
 			panelCheck.indeterminate = chosen > 0 && chosen < bucket.files.length;
 		}
 
+		// 每个 tab 的角标：无选中显示总数，有选中显示「选中数/总数」并高亮
 		document.querySelectorAll('#tabStrip .tab').forEach(tab => {
 			const tabBucket = groupBuckets.find(group => group.key === tab.dataset.group);
 			const badge = tab.querySelector('.tab-badge');
@@ -698,10 +771,12 @@
 		});
 	}
 
+	/** 统计某个分组里被选中的文件数。 */
 	function countSelected(bucket) {
 		return bucket.files.filter(file => selected.has(file.id)).length;
 	}
 
+	/** 把 selected 集合的状态刷回当前可见的所有行复选框（只处理已渲染的 DOM）。 */
 	function syncRowCheckboxes() {
 		document.querySelectorAll('.row-check').forEach(checkbox => {
 			const isSelected = selected.has(Number(checkbox.value));
@@ -710,11 +785,18 @@
 		});
 	}
 
+	/**
+	 * 绑定所有与选择、tab 切换相关的事件。
+	 *
+	 * <p>tab 条和内容区都用「事件委托」：内容区每次切 tab 都会重建，
+	 * 若给每行单独绑事件就得反复解绑，委托到父节点则只需绑一次。
+	 */
 	function initSelection() {
 		const selectAll = document.getElementById('selectAll');
 		const strip = document.getElementById('tabStrip');
 		const panel = document.getElementById('tabPanel');
 
+		// 工具栏「全选」：作用于所有分组的全部文件
 		selectAll.addEventListener('change', () => {
 			if (selectAll.checked) {
 				files.forEach(file => selected.add(file.id));
@@ -725,6 +807,7 @@
 			updateSelectionUi();
 		});
 
+		// 点击 tab 切换分组
 		strip.addEventListener('click', event => {
 			const tab = event.target.closest('.tab');
 			if (tab) {
@@ -732,6 +815,7 @@
 			}
 		});
 
+		// 左右方向键在 tab 之间移动，并同步焦点，符合 WAI-ARIA 的 tab 交互习惯
 		strip.addEventListener('keydown', event => {
 			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
 				return;
@@ -742,6 +826,7 @@
 				return;
 			}
 			event.preventDefault();
+			// 取模实现首尾循环
 			const nextIndex = event.key === 'ArrowRight'
 				? (index + 1) % tabs.length
 				: (index - 1 + tabs.length) % tabs.length;
@@ -749,6 +834,7 @@
 			tabs[nextIndex].focus();
 		});
 
+		// 内容区内的复选框变化：表头「全选本组」和单行勾选
 		panel.addEventListener('change', event => {
 			const panelCheck = event.target.closest('.panel-check');
 			if (panelCheck) {
@@ -780,12 +866,14 @@
 			}
 		});
 
+		// 取消选择：清空集合，但保留当前 tab
 		document.getElementById('clearSelection').addEventListener('click', () => {
 			selected.clear();
 			syncRowCheckboxes();
 			updateSelectionUi();
 		});
 
+		// 批量删除：把选中的 id 一次性提交（可以跨分组）
 		document.getElementById('deleteSelected').addEventListener('click', () => {
 			deleteFiles(Array.from(selected));
 		});
@@ -793,10 +881,17 @@
 		document.getElementById('refresh').addEventListener('click', loadFiles);
 	}
 
+	/**
+	 * 删除一批文件（单个删除也走这里，只是数组只有一个元素）。
+	 *
+	 * <p>删除前二次确认；提交后即使部分失败也照常刷新列表，
+	 * 并把失败原因汇总到 toast 里，避免「静默失败」。
+	 */
 	async function deleteFiles(ids) {
 		if (!ids.length) {
 			return;
 		}
+		// 把 id 换成文件名，确认框里能看清到底要删什么
 		const names = ids.map(id => {
 			const file = files.find(item => item.id === id);
 			return file ? '「' + file.originalName + '」' : '#' + id;
@@ -811,6 +906,7 @@
 		const button = document.getElementById('deleteSelected');
 		button.disabled = true;
 		try {
+			// 批量删除接口：ids 以重复查询参数的形式提交
 			const query = ids.map(id => 'ids=' + encodeURIComponent(id)).join('&');
 			const response = await fetch('/api/files?' + query, { method: 'DELETE' });
 			const data = await response.json().catch(() => ({}));
@@ -818,6 +914,7 @@
 				throw new Error(data.message || 'HTTP ' + response.status);
 			}
 			const failed = data.failed || [];
+			// 已删除的不再参与选择；随后重新拉取列表
 			ids.forEach(id => selected.delete(id));
 			await loadFiles();
 			if (failed.length) {
@@ -828,27 +925,35 @@
 			}
 		} catch (error) {
 			showToast('删除失败：' + error.message);
+			// 出错时恢复按钮可用性，让用户可以重试
 			button.disabled = selected.size === 0;
 		}
 	}
 
-	/** Extensions the server accepts; mirrors ALLOWED_EXTENSIONS in FileStorageService. */
+	// ==================== 上传：白名单与分批参数 ====================
+
+	/**
+	 * 允许上传的后缀，是后端 FileStorageService.ALLOWED_EXTENSIONS 的镜像，
+	 * 用于在客户端提前拦掉不支持的文件（省掉一次注定失败的请求）。
+	 * 服务端仍会再校验一次，这里只是体验优化；增删后端白名单时记得同步本数组。
+	 */
 	const ALLOWED_EXTENSIONS = [
-		// Office
+		// Office 文档
 		'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-		// documents
+		// 普通文档
 		'pdf', 'ofd', 'txt',
-		// raster images
+		// 位图图片
 		'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif', 'tiff', 'avif', 'heic',
-		// camera raw
+		// 相机 RAW
 		'arw', 'nef', 'dng', 'rw2'
 	];
 
-	/** A single request carries at most this many bytes before a new batch is started. */
+	/** 单个请求最多携带的字节数；超过就切到下一批，避免请求体过大被服务端拒绝。 */
 	const BATCH_BYTE_LIMIT = 100 * 1024 * 1024;
-	/** How many upload requests may be in flight at the same time. */
+	/** 同时在飞的请求数上限，兼顾速度与浏览器/服务端压力。 */
 	const MAX_CONCURRENT_REQUESTS = 2;
 
+	/** 队列项四种状态对应的文案。 */
 	const UPLOAD_STATUS_TEXT = {
 		pending: '等待中',
 		uploading: '上传中…',
@@ -856,15 +961,21 @@
 		error: '失败'
 	};
 
-	/** Files picked or dropped in the current upload run. */
+	/** 本轮上传的队列项：{ key, file, state, reason }。每次新的选择/拖拽都会整体重置。 */
 	let uploadEntries = [];
+	/** 生成队列项的 key；用自增序号而不是文件名，避免同名文件互相干扰。 */
 	let uploadKeySeq = 0;
 
+	/**
+	 * 绑定上传相关的交互：点击/键盘打开选择框，以及拖拽进 drop 区域。
+	 */
 	function initUpload() {
 		const zone = document.getElementById('dropZone');
 		const input = document.getElementById('fileInput');
 
+		// 点击区域 = 点击隐藏的原生选择框
 		zone.addEventListener('click', () => input.click());
+		// 键盘可达：Enter/空格同样打开选择框
 		zone.addEventListener('keydown', event => {
 			if (event.key === 'Enter' || event.key === ' ') {
 				event.preventDefault();
@@ -876,11 +987,12 @@
 			if (input.files.length) {
 				startUpload(input.files);
 			}
+			// 清空 value，保证连续两次选同一个文件也能触发 change
 			input.value = '';
 		});
 
-		// dragenter/dragleave fire for every child element, so count them instead of
-		// toggling the highlight directly, otherwise it flickers while moving inside.
+		// dragenter/dragleave 会在进入每个子元素时反复触发，
+		// 用计数器判断是否真正离开了区域，否则鼠标在区域内移动时会闪烁。
 		let dragDepth = 0;
 		zone.addEventListener('dragenter', event => {
 			event.preventDefault();
@@ -888,6 +1000,7 @@
 			zone.classList.add('dragover');
 		});
 		zone.addEventListener('dragover', event => {
+			// 必须阻止默认行为，drop 事件才会触发
 			event.preventDefault();
 			if (event.dataTransfer) {
 				event.dataTransfer.dropEffect = 'copy';
@@ -906,11 +1019,12 @@
 			handleDrop(event.dataTransfer);
 		});
 
-		// A drop outside the zone must not make the browser navigate away to the file.
+		// 拖到区域外时，浏览器默认会直接打开该文件（页面被替换掉），这里全局拦掉
 		window.addEventListener('dragover', event => event.preventDefault());
 		window.addEventListener('drop', event => event.preventDefault());
 	}
 
+	/** 处理放下事件：挑出普通文件，文件夹给出提示（暂不支持递归读取目录）。 */
 	function handleDrop(dataTransfer) {
 		if (!dataTransfer) {
 			return;
@@ -930,6 +1044,10 @@
 		}
 	}
 
+	/**
+	 * 开始一轮上传：重建队列、做客户端预校验，然后交给 runUploads 分批发送。
+	 * 每次新的选择/拖拽都会重置队列，因此队列里始终只反映最近一次操作。
+	 */
 	function startUpload(fileList) {
 		const picked = Array.from(fileList);
 		if (!picked.length) {
@@ -943,7 +1061,7 @@
 			reason: ''
 		}));
 
-		// Reject unsupported types up front rather than spending a request on them.
+		// 后缀不在白名单的直接标红，不浪费一次请求（服务端仍会再校验）
 		for (const entry of uploadEntries) {
 			if (!ALLOWED_EXTENSIONS.includes(extensionOf(entry.file.name))) {
 				entry.state = 'error';
@@ -956,11 +1074,18 @@
 		if (pending.length) {
 			runUploads(pending);
 		} else {
+			// 一个能传的都没有，也要给个总结提示
 			finishUploads();
 		}
 	}
 
-	/** Splits the queue into requests that each stay under BATCH_BYTE_LIMIT. */
+	/**
+	 * 把队列切成若干批，保证每批总字节数不超过 BATCH_BYTE_LIMIT。
+	 *
+	 * <p>贪心累积：能塞进当前批就塞，塞不下就开新批。
+	 * 单个文件本身就超过上限时会独占一批（不会为了凑数把它硬塞进别的批），
+	 * 这样超大文件仍能走服务端的 max-file-size 校验拿到明确错误。
+	 */
 	function buildBatches(entries) {
 		const batches = [];
 		let current = [];
@@ -980,12 +1105,20 @@
 		return batches;
 	}
 
+	/**
+	 * 并发消费所有批次。
+	 *
+	 * <p>用「固定数量的 worker 抢任务」而不是 Promise.all 一次性发全部，
+	 * 这样并发上限恒为 MAX_CONCURRENT_REQUESTS；每批结束后立刻刷新列表，
+	 * 用户能看到文件一个一个出现。
+	 */
 	async function runUploads(entries) {
 		const batches = buildBatches(entries);
 		let next = 0;
 		const workers = Array.from(
 			{ length: Math.min(MAX_CONCURRENT_REQUESTS, batches.length) },
 			async () => {
+				// next++ 是同步取值，多个 worker 不会拿到同一批
 				while (next < batches.length) {
 					await uploadBatch(batches[next++]);
 					await loadFiles();
@@ -995,6 +1128,7 @@
 		finishUploads();
 	}
 
+	/** 发送一批文件（一个 multipart 请求带多个 part），并把结果写回每个队列项。 */
 	async function uploadBatch(batch) {
 		batch.forEach(entry => {
 			entry.state = 'uploading';
@@ -1002,6 +1136,7 @@
 		});
 		renderUploadQueue();
 
+		// 同一个字段名重复 append，后端就会按顺序收到多个 part
 		const formData = new FormData();
 		for (const entry of batch) {
 			formData.append('fileUpload', entry.file, entry.file.name);
@@ -1013,9 +1148,8 @@
 			if (!response.ok) {
 				throw new Error(data.message || 'HTTP ' + response.status);
 			}
-			// results come back in request order, so index i matches batch[i].
-			// The fallback keeps the page usable against a server that has not been
-			// restarted yet and still answers with the older single-file shape.
+			// 后端的 results 与请求顺序一一对应，所以下标 position 就是 batch[position] 的结果。
+			// 兜底分支：兼容尚未重启、仍返回旧版单文件结构的服务端。
 			const results = Array.isArray(data.results)
 				? data.results
 				: (data.id ? [{ index: 0, name: data.originalName, success: true, file: data }] : []);
@@ -1030,6 +1164,7 @@
 				}
 			});
 		} catch (error) {
+			// 整个请求失败（断网、超限等），这一批全部标记为失败
 			batch.forEach(entry => {
 				entry.state = 'error';
 				entry.reason = error.message;
@@ -1038,6 +1173,7 @@
 		renderUploadQueue();
 	}
 
+	/** 全部批次结束后弹一条总结 toast。 */
 	function finishUploads() {
 		const done = uploadEntries.filter(entry => entry.state === 'done').length;
 		const failed = uploadEntries.filter(entry => entry.state === 'error').length;
@@ -1050,6 +1186,7 @@
 		}
 	}
 
+	/** 重绘上传队列与顶部汇总（含「清空列表」按钮）。队列为空时整块隐藏。 */
 	function renderUploadQueue() {
 		const queue = document.getElementById('uploadQueue');
 		const summary = document.getElementById('uploadSummary');
@@ -1064,6 +1201,7 @@
 		queue.hidden = false;
 		summary.hidden = false;
 
+		// 汇总文案：总数 + 各状态的数量（数量为 0 的跳过）
 		const count = state => uploadEntries.filter(entry => entry.state === state).length;
 		const parts = ['共 ' + uploadEntries.length + ' 个'];
 		for (const state of ['done', 'error', 'uploading', 'pending']) {
@@ -1090,6 +1228,7 @@
 		}
 	}
 
+	/** 构造一条队列项：文件名 + 大小 + 状态（状态决定颜色，见 CSS 的 data-state 选择器）。 */
 	function buildQueueItem(entry) {
 		const item = document.createElement('div');
 		item.className = 'queue-item';
@@ -1113,6 +1252,11 @@
 		return item;
 	}
 
+	/**
+	 * 复制文本到剪贴板。
+	 * 优先用异步 Clipboard API（需要 HTTPS 或 localhost 这类安全上下文），
+	 * 不可用时退回临时 textarea + execCommand 的老办法。
+	 */
 	async function copyText(text) {
 		try {
 			if (navigator.clipboard && window.isSecureContext) {
@@ -1120,6 +1264,7 @@
 			} else {
 				const textarea = document.createElement('textarea');
 				textarea.value = text;
+				// 放在视口外且透明，避免复制时页面闪动
 				textarea.style.position = 'fixed';
 				textarea.style.opacity = '0';
 				document.body.appendChild(textarea);
@@ -1133,6 +1278,7 @@
 		}
 	}
 
+	/** 把字节数格式化成人看的大小，例如 1536 -> 1.5 KB。 */
 	function formatSize(bytes) {
 		if (bytes < 1024) {
 			return bytes + ' B';
@@ -1140,6 +1286,7 @@
 		const units = ['KB', 'MB', 'GB', 'TB'];
 		let value = bytes / 1024;
 		let index = 0;
+		// 每满 1024 进一级，最多到 TB
 		while (value >= 1024 && index < units.length - 1) {
 			value /= 1024;
 			index++;
@@ -1147,6 +1294,7 @@
 		return value.toFixed(1) + ' ' + units[index];
 	}
 
+	/** 把后端返回的毫秒时间戳格式化成本地时间；没有值就显示 -。 */
 	function formatTime(timestamp) {
 		if (!timestamp) {
 			return '-';
@@ -1154,6 +1302,7 @@
 		return new Date(timestamp).toLocaleString('zh-CN', { hour12: false });
 	}
 
+	/** 底部浮层提示；重复调用会重置计时器，避免上一条还没消失就叠加。 */
 	let toastTimer;
 	function showToast(message) {
 		const toast = document.getElementById('toast');
@@ -1163,6 +1312,7 @@
 		toastTimer = setTimeout(() => toast.classList.remove('visible'), 2500);
 	}
 
+	// 页面初始化：先拉数据，再绑定上传与选择相关的交互
 	loadFiles();
 	initUpload();
 	initSelection();
