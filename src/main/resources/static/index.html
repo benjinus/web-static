@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>文件列表 - file-server</title>
+	<style>
+		:root {
+			--border: #e2e4e8;
+			--text: #1f2328;
+			--muted: #6b7280;
+			--primary: #2563eb;
+			--primary-dark: #1d4ed8;
+			--danger: #dc2626;
+			--danger-dark: #b91c1c;
+			--tabstrip: #dee1e6;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+				"Microsoft YaHei", sans-serif;
+			background: #f5f6f8;
+			color: var(--text);
+		}
+		.container { max-width: 1040px; margin: 0 auto; padding: 32px 16px; }
+		h1 { font-size: 22px; margin: 0 0 8px; }
+		.hint { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+		.upload-panel {
+			background: #fff;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 16px;
+			margin-bottom: 20px;
+		}
+		.upload-panel h2 { font-size: 16px; margin: 0 0 8px; }
+		.upload-hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+
+		/* ---------------- drag & drop upload ---------------- */
+		.drop-zone {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 6px;
+			padding: 26px 16px;
+			border: 2px dashed #c7ccd4;
+			border-radius: 10px;
+			background: #fafbfc;
+			text-align: center;
+			cursor: pointer;
+			transition: border-color 0.15s, background 0.15s, color 0.15s;
+		}
+		.drop-zone:hover { border-color: #9aa3af; background: #f3f5f8; }
+		.drop-zone:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+		.drop-zone.dragover {
+			border-color: var(--primary);
+			background: #eff6ff;
+		}
+		.drop-zone.dragover .drop-title { color: var(--primary); }
+		.drop-icon {
+			width: 30px;
+			height: 30px;
+			fill: none;
+			stroke: #9aa3af;
+			stroke-width: 1.6;
+			stroke-linecap: round;
+			stroke-linejoin: round;
+			transition: stroke 0.15s;
+		}
+		.drop-zone.dragover .drop-icon { stroke: var(--primary); }
+		.drop-title { font-size: 14px; font-weight: 500; }
+		.drop-sub { font-size: 13px; color: var(--muted); }
+
+		.upload-summary {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			margin: 14px 0 8px;
+			font-size: 13px;
+			color: var(--muted);
+		}
+		.upload-queue {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			max-height: 260px;
+			overflow-y: auto;
+		}
+		.queue-item {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 7px 10px;
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			background: #fff;
+			font-size: 13px;
+		}
+		.queue-name {
+			flex: 1 1 auto;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.queue-size { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
+		.queue-status { flex: 0 0 auto; font-size: 12px; color: var(--muted); max-width: 45%; }
+		.queue-item[data-state="uploading"] .queue-status { color: var(--primary); }
+		.queue-item[data-state="done"] .queue-status { color: #16a34a; }
+		.queue-item[data-state="error"] .queue-status { color: var(--danger); }
+		.queue-item[data-state="error"] { background: #fffafa; border-color: #fecaca; }
+
+		/* ---------------- toolbar ---------------- */
+		.toolbar {
+			display: flex;
+			gap: 12px;
+			align-items: center;
+			flex-wrap: wrap;
+			margin: 0 0 16px;
+		}
+		.global-select {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 14px;
+			cursor: pointer;
+			user-select: none;
+		}
+		.global-select input { width: 16px; height: 16px; cursor: pointer; margin: 0; }
+		.toolbar-right { margin-left: auto; }
+		#selectionInfo { color: var(--muted); font-size: 14px; }
+
+		/* ---------------- tabs + content as one rounded unit ---------------- */
+		.tabs-shell {
+			border-radius: 10px;
+			overflow: hidden;
+			box-shadow: 0 1px 3px rgba(16, 24, 40, 0.09);
+			margin-bottom: 20px;
+			background: #fff;
+		}
+		.tab-strip {
+			display: flex;
+			align-items: flex-end;
+			gap: 3px;
+			padding: 8px 12px 0;
+			background: var(--tabstrip);
+			overflow-x: auto;
+			scrollbar-width: none;
+		}
+		.tab-strip::-webkit-scrollbar { height: 0; }
+		.tab {
+			position: relative;
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			flex: 0 0 auto;
+			padding: 9px 16px 10px;
+			border: none;
+			background: transparent;
+			color: #4b5563;
+			font-family: inherit;
+			font-size: 13px;
+			line-height: 1;
+			white-space: nowrap;
+			cursor: pointer;
+			border-radius: 8px 8px 0 0;
+			transition: background 0.15s;
+		}
+		.tab:not(.active):hover { background: rgba(255, 255, 255, 0.55); }
+		.tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+		.tab.active {
+			background: #fff;
+			color: var(--text);
+			font-weight: 600;
+			z-index: 1;
+		}
+		/* concave "inverted corner" fillets that blend the active tab into the content */
+		.tab.active::before,
+		.tab.active::after {
+			content: "";
+			position: absolute;
+			bottom: 0;
+			width: 8px;
+			height: 8px;
+			pointer-events: none;
+		}
+		.tab.active::before {
+			left: -8px;
+			background: radial-gradient(circle at left top, transparent 0, transparent 8px, #fff 8px);
+		}
+		.tab.active::after {
+			right: -8px;
+			background: radial-gradient(circle at right top, transparent 0, transparent 8px, #fff 8px);
+		}
+		.tab-label { pointer-events: none; }
+		.tab-badge {
+			min-width: 20px;
+			padding: 1px 6px;
+			border-radius: 9px;
+			background: rgba(17, 24, 39, 0.08);
+			color: #6b7280;
+			font-size: 11px;
+			font-weight: 500;
+			text-align: center;
+			pointer-events: none;
+		}
+		.tab.active .tab-badge { background: rgba(17, 24, 39, 0.07); }
+		.tab-badge.has-selection { background: var(--primary); color: #fff; }
+
+		.panel-head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			flex-wrap: wrap;
+			padding: 10px 16px;
+			background: #fff;
+			border-bottom: 1px solid var(--border);
+			font-size: 13px;
+			color: var(--muted);
+		}
+		.panel-meta { margin-left: auto; }
+
+		table {
+			width: 100%;
+			table-layout: fixed;
+			border-collapse: collapse;
+			background: #fff;
+		}
+		.col-check { width: 44px; }
+		.col-size { width: 100px; }
+		.col-time { width: 180px; }
+		.col-actions { width: 250px; }
+		th, td {
+			padding: 10px 14px;
+			text-align: left;
+			font-size: 14px;
+			border-bottom: 1px solid var(--border);
+			word-break: break-all;
+		}
+		th { background: #fafafa; color: var(--muted); font-weight: 500; }
+		tbody tr:last-child td { border-bottom: none; }
+		tbody tr.selected { background: #eff6ff; }
+		td.col-check, th.col-check { text-align: center; padding-right: 0; }
+		.col-check input { width: 16px; height: 16px; cursor: pointer; margin: 0; vertical-align: middle; }
+		.original-name { font-weight: 500; }
+		.stored-name {
+			color: var(--muted);
+			font-size: 12px;
+			margin-top: 2px;
+			word-break: break-all;
+		}
+		.actions { white-space: nowrap; padding-left: 8px; padding-right: 8px; }
+		.actions .btn { padding: 6px 10px; }
+		.actions .btn + .btn { margin-left: 6px; }
+
+		.btn {
+			display: inline-block;
+			padding: 6px 14px;
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			background: #fff;
+			color: var(--text);
+			font-size: 13px;
+			cursor: pointer;
+			text-decoration: none;
+			transition: background 0.15s;
+		}
+		.btn:hover { background: #f3f4f6; }
+		.btn-primary {
+			background: var(--primary);
+			border-color: var(--primary);
+			color: #fff;
+		}
+		.btn-primary:hover { background: var(--primary-dark); }
+		.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+		.btn-download {
+			background: var(--primary);
+			border-color: var(--primary);
+			color: #fff;
+		}
+		.btn-download:hover { background: var(--primary-dark); }
+		.btn-danger {
+			background: var(--danger);
+			border-color: var(--danger);
+			color: #fff;
+		}
+		.btn-danger:hover { background: var(--danger-dark); }
+		.btn-danger-ghost { color: var(--danger); border-color: #fecaca; }
+		.btn-danger-ghost:hover { background: #fef2f2; }
+		.empty {
+			padding: 48px 16px;
+			background: #fff;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			text-align: center;
+			color: var(--muted);
+		}
+		#toast {
+			position: fixed;
+			left: 50%;
+			bottom: 32px;
+			transform: translateX(-50%);
+			background: rgba(17, 24, 39, 0.92);
+			color: #fff;
+			padding: 10px 18px;
+			border-radius: 8px;
+			font-size: 14px;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.2s;
+			max-width: 80vw;
+			word-break: break-all;
+		}
+		#toast.visible { opacity: 1; }
+	</style>
+</head>
+<body>
+<div class="container">
+	<h1>文件列表</h1>
+	<section class="upload-panel">
+		<h2>上传文件</h2>
+		<p class="upload-hint">
+			支持 Office 文档、PDF、OFD、文本、图片（含 AVIF/HEIC）和相机 RAW（ARW/NEF/DNG/RW2）；
+			可一次选多个文件，也可以直接拖拽到下面的区域：<br>
+			.doc .docx .xls .xlsx .ppt .pptx .pdf .ofd .txt
+			.jpg .jpeg .png .gif .bmp .webp .tif .tiff .avif .heic
+			.arw .nef .dng .rw2
+		</p>
+		<div class="drop-zone" id="dropZone" role="button" tabindex="0"
+			aria-label="把文件拖到这里，或点击选择文件上传">
+			<svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/>
+				<path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+			</svg>
+			<div class="drop-title">把文件拖到这里上传</div>
+			<div class="drop-sub">或点击选择文件（支持多选）</div>
+		</div>
+		<input type="file" id="fileInput" multiple hidden
+			accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.ofd,.txt,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tif,.tiff,.avif,.heic,.arw,.nef,.dng,.rw2">
+		<div class="upload-summary" id="uploadSummary" hidden></div>
+		<div class="upload-queue" id="uploadQueue" hidden></div>
+	</section>
+
+	<p class="hint" id="hint">加载中…</p>
+
+	<div class="toolbar" id="toolbar" hidden>
+		<label class="global-select">
+			<input type="checkbox" id="selectAll" disabled>
+			全选
+		</label>
+		<button type="button" id="deleteSelected" class="btn btn-danger" disabled>删除选中</button>
+		<button type="button" id="clearSelection" class="btn" disabled>取消选择</button>
+		<span id="selectionInfo">已选择 0 / 0 个文件</span>
+		<button type="button" id="refresh" class="btn toolbar-right">刷新</button>
+	</div>
+
+	<div class="tabs-shell" id="tabsShell" hidden>
+		<div class="tab-strip" id="tabStrip" role="tablist" aria-label="文件格式分组"></div>
+		<div class="tab-panel" id="tabPanel" role="tabpanel" tabindex="-1">
+			<div class="panel-head">
+				<span id="panelTitle"></span>
+				<span class="panel-meta" id="panelMeta"></span>
+			</div>
+			<div id="panelBody"></div>
+		</div>
+	</div>
+
+	<div id="empty" class="empty" hidden>暂无文件</div>
+</div>
+<div id="toast"></div>
+<script>
+	/**
+	 * File-format groups, in tab order. The first group whose extension list
+	 * matches wins; the group without extensions is the fallback for everything else.
+	 */
+	const FILE_GROUPS = [
+		{ key: 'ofd', label: 'OFD 文档', extensions: ['ofd'] },
+		{ key: 'pdf', label: 'PDF 文档', extensions: ['pdf'] },
+		{ key: 'image', label: '图像文档', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif', 'tiff', 'avif', 'heic'] },
+		{ key: 'raw', label: 'RAW 图像', extensions: ['arw', 'nef', 'dng', 'rw2'] },
+		{ key: 'office', label: 'Office 文档', extensions: ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] },
+		{ key: 'text', label: 'Text 文本文档', extensions: ['txt', 'text', 'csv', 'tsv', 'md', 'log', 'json', 'xml', 'yml', 'yaml', 'html', 'htm'] },
+		{ key: 'other', label: '其他文档', extensions: [] }
+	];
+
+	/** Files currently listed, mirrored from the API. */
+	let files = [];
+	/** Files bucketed by format group, rebuilt on every render. */
+	let groupBuckets = [];
+	/** Key of the group whose tab is showing. */
+	let activeGroupKey = null;
+	/** Ids of the rows the user ticked. */
+	const selected = new Set();
+
+	async function loadFiles() {
+		const hint = document.getElementById('hint');
+		try {
+			const response = await fetch('/api/files');
+			if (!response.ok) {
+				throw new Error('HTTP ' + response.status);
+			}
+			files = await response.json();
+			// Drop selections that no longer exist (deleted in another tab, etc).
+			const liveIds = new Set(files.map(file => file.id));
+			for (const id of Array.from(selected)) {
+				if (!liveIds.has(id)) {
+					selected.delete(id);
+				}
+			}
+			renderFiles();
+		} catch (error) {
+			hint.textContent = '加载失败：' + error.message;
+		}
+	}
+
+	function renderFiles() {
+		const shell = document.getElementById('tabsShell');
+		const empty = document.getElementById('empty');
+		const toolbar = document.getElementById('toolbar');
+		const hint = document.getElementById('hint');
+
+		groupBuckets = groupFiles(files);
+
+		if (files.length === 0) {
+			shell.hidden = true;
+			toolbar.hidden = true;
+			empty.hidden = false;
+			hint.textContent = '共 0 个文件';
+			activeGroupKey = null;
+			updateSelectionUi();
+			return;
+		}
+
+		shell.hidden = false;
+		toolbar.hidden = false;
+		empty.hidden = true;
+		hint.textContent = '共 ' + files.length + ' 个文件，分为 ' + groupBuckets.length + ' 类';
+
+		// Keep the tab the user was on; fall back to the first one when it disappeared.
+		if (!groupBuckets.some(bucket => bucket.key === activeGroupKey)) {
+			activeGroupKey = groupBuckets[0].key;
+		}
+		renderTabs();
+		renderPanel();
+		updateSelectionUi();
+	}
+
+	/** Buckets the flat file list into the format groups, keeping FILE_GROUPS order. */
+	function groupFiles(list) {
+		const byKey = new Map();
+		for (const file of list) {
+			const definition = groupOf(file.originalName || file.name);
+			let bucket = byKey.get(definition.key);
+			if (!bucket) {
+				bucket = { key: definition.key, label: definition.label, files: [] };
+				byKey.set(definition.key, bucket);
+			}
+			bucket.files.push(file);
+		}
+		return FILE_GROUPS.filter(definition => byKey.has(definition.key))
+			.map(definition => byKey.get(definition.key));
+	}
+
+	function groupOf(name) {
+		const extension = extensionOf(name);
+		return FILE_GROUPS.find(group => group.extensions.includes(extension))
+			|| FILE_GROUPS[FILE_GROUPS.length - 1];
+	}
+
+	function extensionOf(name) {
+		const value = String(name || '');
+		const dot = value.lastIndexOf('.');
+		return dot < 0 || dot === value.length - 1 ? '' : value.slice(dot + 1).toLowerCase();
+	}
+
+	function activeBucket() {
+		return groupBuckets.find(bucket => bucket.key === activeGroupKey) || null;
+	}
+
+	function renderTabs() {
+		const strip = document.getElementById('tabStrip');
+		strip.replaceChildren();
+		for (const bucket of groupBuckets) {
+			const tab = document.createElement('button');
+			tab.type = 'button';
+			tab.className = 'tab';
+			tab.dataset.group = bucket.key;
+			tab.setAttribute('role', 'tab');
+			tab.id = 'tab-' + bucket.key;
+			tab.setAttribute('aria-controls', 'tabPanel');
+
+			const label = document.createElement('span');
+			label.className = 'tab-label';
+			label.textContent = bucket.label;
+
+			const badge = document.createElement('span');
+			badge.className = 'tab-badge';
+
+			tab.append(label, badge);
+			strip.appendChild(tab);
+		}
+		syncActiveTab();
+	}
+
+	function syncActiveTab() {
+		document.querySelectorAll('#tabStrip .tab').forEach(tab => {
+			const isActive = tab.dataset.group === activeGroupKey;
+			tab.classList.toggle('active', isActive);
+			tab.setAttribute('aria-selected', String(isActive));
+		});
+		const panel = document.getElementById('tabPanel');
+		if (activeGroupKey) {
+			panel.setAttribute('aria-labelledby', 'tab-' + activeGroupKey);
+		}
+	}
+
+	/** Switches tabs without rebuilding the strip, so focus is preserved. */
+	function setActiveGroup(key) {
+		if (key === activeGroupKey) {
+			return;
+		}
+		activeGroupKey = key;
+		syncActiveTab();
+		renderPanel();
+		updateSelectionUi();
+	}
+
+	function renderPanel() {
+		const bucket = activeBucket();
+		const title = document.getElementById('panelTitle');
+		const meta = document.getElementById('panelMeta');
+		const body = document.getElementById('panelBody');
+		body.replaceChildren();
+
+		if (!bucket) {
+			title.textContent = '';
+			meta.textContent = '';
+			return;
+		}
+
+		title.textContent = bucket.label + '（.' + primaryExtension(bucket) + '）';
+		const totalBytes = bucket.files.reduce((sum, file) => sum + file.size, 0);
+		meta.textContent = bucket.files.length + ' 个文件 · 共 ' + formatSize(totalBytes);
+		body.appendChild(buildTable(bucket));
+	}
+
+	function primaryExtension(bucket) {
+		const first = bucket.files[0];
+		return extensionOf(first ? (first.originalName || first.name) : '') || '-';
+	}
+
+	function buildTable(bucket) {
+		const table = document.createElement('table');
+
+		const colgroup = document.createElement('colgroup');
+		for (const className of ['col-check', '', 'col-size', 'col-time', 'col-actions']) {
+			const col = document.createElement('col');
+			if (className) {
+				col.className = className;
+			}
+			colgroup.appendChild(col);
+		}
+		table.appendChild(colgroup);
+
+		const thead = document.createElement('thead');
+		const headRow = document.createElement('tr');
+
+		const checkHead = document.createElement('th');
+		checkHead.className = 'col-check';
+		const panelCheck = document.createElement('input');
+		panelCheck.type = 'checkbox';
+		panelCheck.className = 'panel-check';
+		panelCheck.setAttribute('aria-label', '选择全部' + bucket.label);
+		checkHead.appendChild(panelCheck);
+		headRow.appendChild(checkHead);
+
+		for (const [className, text] of [['', '文件名'], ['col-size', '大小'], ['col-time', '上传时间'], ['col-actions', '操作']]) {
+			const th = document.createElement('th');
+			if (className) {
+				th.className = className;
+			}
+			th.textContent = text;
+			headRow.appendChild(th);
+		}
+		thead.appendChild(headRow);
+		table.appendChild(thead);
+
+		const tbody = document.createElement('tbody');
+		for (const file of bucket.files) {
+			tbody.appendChild(buildRow(file));
+		}
+		table.appendChild(tbody);
+		return table;
+	}
+
+	function buildRow(file) {
+		const tr = document.createElement('tr');
+		tr.dataset.id = String(file.id);
+		if (selected.has(file.id)) {
+			tr.classList.add('selected');
+		}
+
+		const checkCell = document.createElement('td');
+		checkCell.className = 'col-check';
+		const checkbox = document.createElement('input');
+		checkbox.type = 'checkbox';
+		checkbox.className = 'row-check';
+		checkbox.value = String(file.id);
+		checkbox.checked = selected.has(file.id);
+		checkbox.setAttribute('aria-label', '选择 ' + file.originalName);
+		checkCell.appendChild(checkbox);
+		tr.appendChild(checkCell);
+
+		const nameCell = document.createElement('td');
+		const original = document.createElement('div');
+		original.className = 'original-name';
+		original.textContent = file.originalName;
+		original.title = file.originalName;
+		const stored = document.createElement('div');
+		stored.className = 'stored-name';
+		stored.textContent = file.storedPath || file.name;
+		stored.title = file.storedPath || file.name;
+		nameCell.append(original, stored);
+		tr.appendChild(nameCell);
+
+		const sizeCell = document.createElement('td');
+		sizeCell.className = 'col-size';
+		sizeCell.textContent = formatSize(file.size);
+		tr.appendChild(sizeCell);
+
+		const timeCell = document.createElement('td');
+		timeCell.className = 'col-time';
+		timeCell.textContent = formatTime(file.uploadedAt);
+		tr.appendChild(timeCell);
+
+		const actions = document.createElement('td');
+		actions.className = 'actions col-actions';
+
+		const copyButton = document.createElement('button');
+		copyButton.type = 'button';
+		copyButton.className = 'btn';
+		copyButton.textContent = '拷贝地址';
+		copyButton.addEventListener('click', () => copyText(new URL(file.downloadUrl, location.origin).href));
+
+		const downloadLink = document.createElement('a');
+		downloadLink.className = 'btn btn-download';
+		downloadLink.href = file.downloadUrl;
+		downloadLink.textContent = '下载';
+
+		const deleteButton = document.createElement('button');
+		deleteButton.type = 'button';
+		deleteButton.className = 'btn btn-danger-ghost';
+		deleteButton.textContent = '删除';
+		deleteButton.addEventListener('click', () => deleteFiles([file.id]));
+
+		actions.append(copyButton, downloadLink, deleteButton);
+		tr.appendChild(actions);
+
+		return tr;
+	}
+
+	function updateSelectionUi() {
+		const selectAll = document.getElementById('selectAll');
+		const deleteSelected = document.getElementById('deleteSelected');
+		const clearSelection = document.getElementById('clearSelection');
+		const selectionInfo = document.getElementById('selectionInfo');
+
+		selectAll.disabled = files.length === 0;
+		selectAll.checked = files.length > 0 && selected.size === files.length;
+		selectAll.indeterminate = selected.size > 0 && selected.size < files.length;
+
+		deleteSelected.disabled = selected.size === 0;
+		clearSelection.disabled = selected.size === 0;
+		selectionInfo.textContent = '已选择 ' + selected.size + ' / ' + files.length + ' 个文件';
+
+		// the visible tab's "select all in this group" checkbox
+		const panelCheck = document.querySelector('.panel-check');
+		const bucket = activeBucket();
+		if (panelCheck && bucket) {
+			const chosen = countSelected(bucket);
+			panelCheck.checked = chosen > 0 && chosen === bucket.files.length;
+			panelCheck.indeterminate = chosen > 0 && chosen < bucket.files.length;
+		}
+
+		document.querySelectorAll('#tabStrip .tab').forEach(tab => {
+			const tabBucket = groupBuckets.find(group => group.key === tab.dataset.group);
+			const badge = tab.querySelector('.tab-badge');
+			if (!tabBucket || !badge) {
+				return;
+			}
+			const chosen = countSelected(tabBucket);
+			badge.textContent = chosen > 0
+				? chosen + '/' + tabBucket.files.length
+				: String(tabBucket.files.length);
+			badge.classList.toggle('has-selection', chosen > 0);
+		});
+	}
+
+	function countSelected(bucket) {
+		return bucket.files.filter(file => selected.has(file.id)).length;
+	}
+
+	function syncRowCheckboxes() {
+		document.querySelectorAll('.row-check').forEach(checkbox => {
+			const isSelected = selected.has(Number(checkbox.value));
+			checkbox.checked = isSelected;
+			checkbox.closest('tr').classList.toggle('selected', isSelected);
+		});
+	}
+
+	function initSelection() {
+		const selectAll = document.getElementById('selectAll');
+		const strip = document.getElementById('tabStrip');
+		const panel = document.getElementById('tabPanel');
+
+		selectAll.addEventListener('change', () => {
+			if (selectAll.checked) {
+				files.forEach(file => selected.add(file.id));
+			} else {
+				selected.clear();
+			}
+			syncRowCheckboxes();
+			updateSelectionUi();
+		});
+
+		strip.addEventListener('click', event => {
+			const tab = event.target.closest('.tab');
+			if (tab) {
+				setActiveGroup(tab.dataset.group);
+			}
+		});
+
+		strip.addEventListener('keydown', event => {
+			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+				return;
+			}
+			const tabs = Array.from(strip.querySelectorAll('.tab'));
+			const index = tabs.findIndex(tab => tab.dataset.group === activeGroupKey);
+			if (index < 0) {
+				return;
+			}
+			event.preventDefault();
+			const nextIndex = event.key === 'ArrowRight'
+				? (index + 1) % tabs.length
+				: (index - 1 + tabs.length) % tabs.length;
+			setActiveGroup(tabs[nextIndex].dataset.group);
+			tabs[nextIndex].focus();
+		});
+
+		panel.addEventListener('change', event => {
+			const panelCheck = event.target.closest('.panel-check');
+			if (panelCheck) {
+				const bucket = activeBucket();
+				if (bucket) {
+					bucket.files.forEach(file => {
+						if (panelCheck.checked) {
+							selected.add(file.id);
+						} else {
+							selected.delete(file.id);
+						}
+					});
+				}
+				syncRowCheckboxes();
+				updateSelectionUi();
+				return;
+			}
+
+			const rowCheckbox = event.target.closest('.row-check');
+			if (rowCheckbox) {
+				const id = Number(rowCheckbox.value);
+				if (rowCheckbox.checked) {
+					selected.add(id);
+				} else {
+					selected.delete(id);
+				}
+				rowCheckbox.closest('tr').classList.toggle('selected', rowCheckbox.checked);
+				updateSelectionUi();
+			}
+		});
+
+		document.getElementById('clearSelection').addEventListener('click', () => {
+			selected.clear();
+			syncRowCheckboxes();
+			updateSelectionUi();
+		});
+
+		document.getElementById('deleteSelected').addEventListener('click', () => {
+			deleteFiles(Array.from(selected));
+		});
+
+		document.getElementById('refresh').addEventListener('click', loadFiles);
+	}
+
+	async function deleteFiles(ids) {
+		if (!ids.length) {
+			return;
+		}
+		const names = ids.map(id => {
+			const file = files.find(item => item.id === id);
+			return file ? '「' + file.originalName + '」' : '#' + id;
+		});
+		const question = ids.length === 1
+			? '确定删除 ' + names[0] + ' 吗？'
+			: '确定删除选中的 ' + ids.length + ' 个文件吗？\n' + names.join('\n');
+		if (!window.confirm(question + '\n\n删除后文件会移动到 upload/deleted/日期/ 目录，记录保留在数据库中。')) {
+			return;
+		}
+
+		const button = document.getElementById('deleteSelected');
+		button.disabled = true;
+		try {
+			const query = ids.map(id => 'ids=' + encodeURIComponent(id)).join('&');
+			const response = await fetch('/api/files?' + query, { method: 'DELETE' });
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				throw new Error(data.message || 'HTTP ' + response.status);
+			}
+			const failed = data.failed || [];
+			ids.forEach(id => selected.delete(id));
+			await loadFiles();
+			if (failed.length) {
+				showToast('已删除 ' + data.deleted + ' 个文件，' + failed.length + ' 个失败：'
+					+ failed.map(item => item.reason).join('；'));
+			} else {
+				showToast('已删除 ' + data.deleted + ' 个文件');
+			}
+		} catch (error) {
+			showToast('删除失败：' + error.message);
+			button.disabled = selected.size === 0;
+		}
+	}
+
+	/** Extensions the server accepts; mirrors ALLOWED_EXTENSIONS in FileStorageService. */
+	const ALLOWED_EXTENSIONS = [
+		// Office
+		'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+		// documents
+		'pdf', 'ofd', 'txt',
+		// raster images
+		'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif', 'tiff', 'avif', 'heic',
+		// camera raw
+		'arw', 'nef', 'dng', 'rw2'
+	];
+
+	/** A single request carries at most this many bytes before a new batch is started. */
+	const BATCH_BYTE_LIMIT = 100 * 1024 * 1024;
+	/** How many upload requests may be in flight at the same time. */
+	const MAX_CONCURRENT_REQUESTS = 2;
+
+	const UPLOAD_STATUS_TEXT = {
+		pending: '等待中',
+		uploading: '上传中…',
+		done: '成功',
+		error: '失败'
+	};
+
+	/** Files picked or dropped in the current upload run. */
+	let uploadEntries = [];
+	let uploadKeySeq = 0;
+
+	function initUpload() {
+		const zone = document.getElementById('dropZone');
+		const input = document.getElementById('fileInput');
+
+		zone.addEventListener('click', () => input.click());
+		zone.addEventListener('keydown', event => {
+			if (event.key === 'Enter' || event.key === ' ') {
+				event.preventDefault();
+				input.click();
+			}
+		});
+
+		input.addEventListener('change', () => {
+			if (input.files.length) {
+				startUpload(input.files);
+			}
+			input.value = '';
+		});
+
+		// dragenter/dragleave fire for every child element, so count them instead of
+		// toggling the highlight directly, otherwise it flickers while moving inside.
+		let dragDepth = 0;
+		zone.addEventListener('dragenter', event => {
+			event.preventDefault();
+			dragDepth++;
+			zone.classList.add('dragover');
+		});
+		zone.addEventListener('dragover', event => {
+			event.preventDefault();
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect = 'copy';
+			}
+		});
+		zone.addEventListener('dragleave', () => {
+			dragDepth = Math.max(0, dragDepth - 1);
+			if (dragDepth === 0) {
+				zone.classList.remove('dragover');
+			}
+		});
+		zone.addEventListener('drop', event => {
+			event.preventDefault();
+			dragDepth = 0;
+			zone.classList.remove('dragover');
+			handleDrop(event.dataTransfer);
+		});
+
+		// A drop outside the zone must not make the browser navigate away to the file.
+		window.addEventListener('dragover', event => event.preventDefault());
+		window.addEventListener('drop', event => event.preventDefault());
+	}
+
+	function handleDrop(dataTransfer) {
+		if (!dataTransfer) {
+			return;
+		}
+		const items = Array.from(dataTransfer.items || []);
+		const files = Array.from(dataTransfer.files || []);
+
+		const folders = items.filter(item => {
+			const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+			return entry ? entry.isDirectory : false;
+		}).length;
+		if (folders > 0) {
+			showToast('暂不支持文件夹，已忽略 ' + folders + ' 个文件夹');
+		}
+		if (files.length) {
+			startUpload(files);
+		}
+	}
+
+	function startUpload(fileList) {
+		const picked = Array.from(fileList);
+		if (!picked.length) {
+			return;
+		}
+
+		uploadEntries = picked.map(file => ({
+			key: 'upload-' + (++uploadKeySeq),
+			file,
+			state: 'pending',
+			reason: ''
+		}));
+
+		// Reject unsupported types up front rather than spending a request on them.
+		for (const entry of uploadEntries) {
+			if (!ALLOWED_EXTENSIONS.includes(extensionOf(entry.file.name))) {
+				entry.state = 'error';
+				entry.reason = '不支持的文件类型';
+			}
+		}
+
+		renderUploadQueue();
+		const pending = uploadEntries.filter(entry => entry.state === 'pending');
+		if (pending.length) {
+			runUploads(pending);
+		} else {
+			finishUploads();
+		}
+	}
+
+	/** Splits the queue into requests that each stay under BATCH_BYTE_LIMIT. */
+	function buildBatches(entries) {
+		const batches = [];
+		let current = [];
+		let bytes = 0;
+		for (const entry of entries) {
+			if (current.length && bytes + entry.file.size > BATCH_BYTE_LIMIT) {
+				batches.push(current);
+				current = [];
+				bytes = 0;
+			}
+			current.push(entry);
+			bytes += entry.file.size;
+		}
+		if (current.length) {
+			batches.push(current);
+		}
+		return batches;
+	}
+
+	async function runUploads(entries) {
+		const batches = buildBatches(entries);
+		let next = 0;
+		const workers = Array.from(
+			{ length: Math.min(MAX_CONCURRENT_REQUESTS, batches.length) },
+			async () => {
+				while (next < batches.length) {
+					await uploadBatch(batches[next++]);
+					await loadFiles();
+				}
+			});
+		await Promise.all(workers);
+		finishUploads();
+	}
+
+	async function uploadBatch(batch) {
+		batch.forEach(entry => {
+			entry.state = 'uploading';
+			entry.reason = '';
+		});
+		renderUploadQueue();
+
+		const formData = new FormData();
+		for (const entry of batch) {
+			formData.append('fileUpload', entry.file, entry.file.name);
+		}
+
+		try {
+			const response = await fetch('/api/files', { method: 'POST', body: formData });
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				throw new Error(data.message || 'HTTP ' + response.status);
+			}
+			// results come back in request order, so index i matches batch[i].
+			// The fallback keeps the page usable against a server that has not been
+			// restarted yet and still answers with the older single-file shape.
+			const results = Array.isArray(data.results)
+				? data.results
+				: (data.id ? [{ index: 0, name: data.originalName, success: true, file: data }] : []);
+			batch.forEach((entry, position) => {
+				const result = results[position];
+				if (result && result.success) {
+					entry.state = 'done';
+					entry.reason = result.file && result.file.duplicate ? '内容重复，已复用存储文件' : '';
+				} else {
+					entry.state = 'error';
+					entry.reason = (result && result.reason) || '上传失败';
+				}
+			});
+		} catch (error) {
+			batch.forEach(entry => {
+				entry.state = 'error';
+				entry.reason = error.message;
+			});
+		}
+		renderUploadQueue();
+	}
+
+	function finishUploads() {
+		const done = uploadEntries.filter(entry => entry.state === 'done').length;
+		const failed = uploadEntries.filter(entry => entry.state === 'error').length;
+		if (done && failed) {
+			showToast('上传结束：成功 ' + done + ' 个，失败 ' + failed + ' 个');
+		} else if (done) {
+			showToast('上传完成：成功 ' + done + ' 个文件');
+		} else if (failed) {
+			showToast('上传失败：' + failed + ' 个文件');
+		}
+	}
+
+	function renderUploadQueue() {
+		const queue = document.getElementById('uploadQueue');
+		const summary = document.getElementById('uploadSummary');
+		queue.replaceChildren();
+
+		if (!uploadEntries.length) {
+			queue.hidden = true;
+			summary.hidden = true;
+			return;
+		}
+
+		queue.hidden = false;
+		summary.hidden = false;
+
+		const count = state => uploadEntries.filter(entry => entry.state === state).length;
+		const parts = ['共 ' + uploadEntries.length + ' 个'];
+		for (const state of ['done', 'error', 'uploading', 'pending']) {
+			const value = count(state);
+			if (value) {
+				parts.push(UPLOAD_STATUS_TEXT[state].replace('…', '') + ' ' + value);
+			}
+		}
+
+		const text = document.createElement('span');
+		text.textContent = parts.join(' · ');
+		const clear = document.createElement('button');
+		clear.type = 'button';
+		clear.className = 'btn';
+		clear.textContent = '清空列表';
+		clear.addEventListener('click', () => {
+			uploadEntries = [];
+			renderUploadQueue();
+		});
+		summary.replaceChildren(text, clear);
+
+		for (const entry of uploadEntries) {
+			queue.appendChild(buildQueueItem(entry));
+		}
+	}
+
+	function buildQueueItem(entry) {
+		const item = document.createElement('div');
+		item.className = 'queue-item';
+		item.dataset.state = entry.state;
+
+		const name = document.createElement('span');
+		name.className = 'queue-name';
+		name.textContent = entry.file.name;
+		name.title = entry.file.name;
+
+		const size = document.createElement('span');
+		size.className = 'queue-size';
+		size.textContent = formatSize(entry.file.size);
+
+		const status = document.createElement('span');
+		status.className = 'queue-status';
+		status.textContent = UPLOAD_STATUS_TEXT[entry.state] + (entry.reason ? '：' + entry.reason : '');
+		status.title = status.textContent;
+
+		item.append(name, size, status);
+		return item;
+	}
+
+	async function copyText(text) {
+		try {
+			if (navigator.clipboard && window.isSecureContext) {
+				await navigator.clipboard.writeText(text);
+			} else {
+				const textarea = document.createElement('textarea');
+				textarea.value = text;
+				textarea.style.position = 'fixed';
+				textarea.style.opacity = '0';
+				document.body.appendChild(textarea);
+				textarea.select();
+				document.execCommand('copy');
+				textarea.remove();
+			}
+			showToast('已复制下载地址：' + text);
+		} catch (error) {
+			showToast('复制失败：' + error.message);
+		}
+	}
+
+	function formatSize(bytes) {
+		if (bytes < 1024) {
+			return bytes + ' B';
+		}
+		const units = ['KB', 'MB', 'GB', 'TB'];
+		let value = bytes / 1024;
+		let index = 0;
+		while (value >= 1024 && index < units.length - 1) {
+			value /= 1024;
+			index++;
+		}
+		return value.toFixed(1) + ' ' + units[index];
+	}
+
+	function formatTime(timestamp) {
+		if (!timestamp) {
+			return '-';
+		}
+		return new Date(timestamp).toLocaleString('zh-CN', { hour12: false });
+	}
+
+	let toastTimer;
+	function showToast(message) {
+		const toast = document.getElementById('toast');
+		toast.textContent = message;
+		toast.classList.add('visible');
+		clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => toast.classList.remove('visible'), 2500);
+	}
+
+	loadFiles();
+	initUpload();
+	initSelection();
+</script>
+</body>
+</html>
