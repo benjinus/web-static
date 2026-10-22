@@ -31,6 +31,8 @@ dependencies {
 
 	// H2 数据库驱动，只在运行时需要
 	runtimeOnly 'com.h2database:h2'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {

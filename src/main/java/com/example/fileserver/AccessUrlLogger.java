@@ -62,12 +62,14 @@ public class AccessUrlLogger {
 	public void printAccessUrls() {
 		int port = resolvePort();
 		String basePath = resolveBasePath();
+		String scheme = environment.getProperty("server.ssl.enabled", Boolean.class, false) ? "https://" : "http://";
 		// server.address 一旦配置，服务只监听该网卡，其他地址都不通，因此不再枚举网卡
 		String boundAddress = environment.getProperty("server.address", "").trim();
 
 		List<String> localAddresses = new ArrayList<>();
 		List<String> networkAddresses = new ArrayList<>();
-		if (StringUtils.hasText(boundAddress)) {
+		boolean wildcard = "0.0.0.0".equals(boundAddress) || "::".equals(boundAddress);
+		if (StringUtils.hasText(boundAddress) && !wildcard) {
 			localAddresses.add(boundAddress);
 		} else {
 			localAddresses.add("localhost");
@@ -80,20 +82,21 @@ public class AccessUrlLogger {
 		out.append(newline).append(LINE).append(newline);
 		out.append("  应用已启动，可通过以下地址访问：").append(newline);
 		for (String host : localAddresses) {
-			out.append("    本机访问   http://").append(host).append(':').append(port).append(basePath).append(newline);
+			out.append("    本机访问   ").append(scheme).append(host).append(':').append(port).append(basePath).append(newline);
 		}
 		for (String host : networkAddresses) {
-			out.append("    局域网访问 http://").append(host).append(':').append(port).append(basePath).append(newline);
+			out.append("    局域网访问 ").append(scheme).append(host).append(':').append(port).append(basePath).append(newline);
 		}
 		// 一条地址都没枚举到时给个明确提示，免得让人以为是漏打印了
-		if (StringUtils.hasText(boundAddress) && networkAddresses.isEmpty()) {
+		if (StringUtils.hasText(boundAddress) && !wildcard && networkAddresses.isEmpty()) {
 			out.append("    (已通过 server.address 绑定到指定网卡)").append(newline);
-		} else if (!StringUtils.hasText(boundAddress) && networkAddresses.isEmpty()) {
+		} else if (networkAddresses.isEmpty()) {
 			out.append("    (未检测到局域网 IPv4 地址)").append(newline);
 		}
 		// H2 控制台只在开启时才提示，避免打印一个 404 的地址
 		if (isH2ConsoleEnabled()) {
-			out.append("    H2 控制台  http://localhost:").append(port)
+			out.append("    H2 控制台  ").append(scheme).append("localhost:").append(port)
+					.append(basePath.substring(0, basePath.length() - 1))
 					.append(normalizePath(environment.getProperty("spring.h2.console.path", "/h2-console")))
 					.append(newline);
 		}

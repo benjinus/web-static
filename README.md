@@ -133,6 +133,49 @@ spring.h2.console.enabled=true
 
 CORS 已全局开启，允许任意来源、方法和请求头。
 
+## 文档签名 webhook 测试接收端
+
+`POST /api/webhooks/document-sign` 用于验签并记录平台回调，不需要 URL 查询参数，成功接收或重复投递均返回 **204，无响应体**。默认关闭；在仓库根目录初始化本地证书和签名秘密，再显式加载 HTTPS 测试配置：
+
+```bash
+./scripts/setup-document-sign-webhook.sh
+./gradlew bootRun --args='--spring.config.additional-location=file:./config/document-sign-webhook.properties'
+# 或
+java -jar build/libs/file-server-0.0.1-SNAPSHOT.jar \
+  --spring.config.additional-location=file:./config/document-sign-webhook.properties
+```
+
+HTTPS 测试配置监听 `0.0.0.0:8443`，三个接收地址为：
+
+* `https://192.168.0.18:8443/api/webhooks/document-sign`
+* `https://127.0.0.1:8443/api/webhooks/document-sign`
+* `https://localhost:8443/api/webhooks/document-sign`
+
+配置入口是 `config/document-sign-webhook.properties`。实际签名秘密及密钥库密码保存在 `.local/webhook/application.properties`，发送方需使用其中 `webhook.document-sign.signing-secret` 的原始字符串作为 UTF-8 密钥。该目录被 Git 忽略，秘密和私钥不应提交或输出到日志。初始化脚本不覆盖已有材料；应用开启 webhook 但未配置签名秘密时启动失败。普通启动仍默认关闭该路由。
+
+自签名证书位于 `.local/webhook/receiver.crt`，PKCS12 密钥库为 `.local/webhook/receiver.p12`。证书 SAN 包含上述三个主机名/IP；调用端需显式信任该证书，例如 `curl --cacert .local/webhook/receiver.crt https://localhost:8443/`，不使用 `-k`。脚本不会修改操作系统的信任库。路径均相对仓库根目录，启动命令也应在此目录执行。
+
+请求必须为 JSON，包含 `eventId`、`jobId`、`operation`、`resultAvailable`（布尔值）、`state`、`timestamp`，并携带以下三个非空请求头：
+
+* `X-Document-Sign-Event-Id`：必须与 JSON 中的 `eventId` 一致。
+* `X-Document-Sign-Timestamp`：本次投递时间，ISO-8601 Instant；保持原字符串参与签名，允许与 body 的事件时间不同。
+* `X-Document-Sign-Signature`：`v1=` 加 64 位小写十六进制 HMAC-SHA256。
+
+签名输入依次为四个 frame：固定域 `rhc-office.document-sign.webhook.v1` 的 UTF-8、事件 ID 头的 ASCII、投递时间头的 ASCII、原始 body 字节。每段先写四字节大端字节长度，再写内容。接收端使用常量时间比较，并校验投递时间位于当前时间正负五分钟内；每次重试也需重新验签。`eventId` 和 `jobId` 必须为 UUID，`state` 必须为 `SUCCEEDED`、`FAILED`、`CANCELLED` 或 `QUARANTINED`，body 的 `timestamp` 为 ISO-8601 Instant。
+
+接收端将**原始请求字节**、三个请求头和接收时间存入现有 H2 数据库的独立表，新事件标记为 `VERIFIED`；提交成功后才确认接收。以 `eventId` 去重，重复请求不新增事件；同一 ID 的请求体字节不同返回 409，保留首次记录。请求体最多 1 MiB，超限返回 413；非法请求返回 400，签名或投递时间校验失败返回 401，存储失败返回 503，供平台重试。未开启时路由返回 404。历史 `UNVERIFIED` 记录不会被改写为已验签。
+
+不新增公开查询接口，HTTPS 测试配置关闭 H2 Web 控制台。数据库文件仍为 `data/file-server.mv.db`，表名为 `document_sign_webhook_event`，可在本地数据库工具中执行：
+
+```sql
+SELECT event_id, received_at, verification_status
+FROM document_sign_webhook_event ORDER BY received_at DESC;
+```
+
+`raw_body` 为未经重新序列化的 BLOB，`signature_timestamp`、`signature` 保留首次投递的请求头；事件 ID 请求头与 `event_id` 相同。请将这些记录作为测试数据管理，其中包含完整回调内容。
+
+接入文档明确要求正式 worker 的目标为 HTTPS 域名，禁止裸 IP 或解析到不允许地址的域名。上述 IP/localhost 与自签名证书用于本地联调，**不代表已满足正式发送平台的 DNS/IP 准入或真实投递验收**。正式接入仍需已准入的域名、网络及发送方信任的证书，不关闭证书或目标校验。若配置了 context-path，接收地址需加此前缀。
+
 ## 页面
 
 打开 <http://localhost:8080/> 查看文件列表：
